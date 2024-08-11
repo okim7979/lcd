@@ -4,21 +4,11 @@
 
     RA6963 그래픽 LCD 컨트롤러
         - 초고속 병렬 통신을 위한 C 코드 사용
-        - 동일한 폴더에 parallel.so가 필요함
-        - 빠른 전송을 위해 데이터는 연속적인 바이트 블록으로 제공되어야 함
-        - 읽기 및 쓰기를 지원하며, 읽기는 선택 사항임
-        - 백라이트 제어, PWM은 dtoverlay 방식을 사용함
+        - requires parallel.so in the same folder
+        - data for fast transfer have to be supplied in contiguous block of bytes
+        - supports writing and reading, reading is optional
 
-    PWM dtoverlay 방식
-        - "/boot/config.txt"에 "dtoverlay=pwm,pin=<pin>,func=<func>"을 추가
-
-        GPIO 핀    PWM 채널    기능          설명
-        12          0           4 (ALT0)
-        13          1           4 (ALT0)
-        18          0           2 (ALT5)    모든 Raspberry Pi에서 작동함
-        19          1           2 (ALT5)
-
-    자세한 정보는: http://www.pinteric.com/displays.html을 참조
+    for more information see: http://www.pinteric.com/displays.html
 """
 
 import os, numpy, time
@@ -93,8 +83,6 @@ gpioSetMode(gpio, mode)
 GPIO 모드를 설정합니다.
 """
 PI_OUTPUT = 1
-PI_ALT0 = 4
-PI_ALT5 = 2
 gpioSetMode = parallel.gpioSetMode
 gpioSetMode.argtypes = [c_uint, c_uint]
 
@@ -105,10 +93,6 @@ GPIO에 값을 씁니다.
 """
 gpioWrite = parallel.gpioWrite
 gpioWrite.argtypes = [c_uint, c_uint]
-
-# PWM 상수
-PWMPATH = '/sys/class/pwm/pwmchip0'
-PWMPER = 100000 # 주기(나노초 단위), 10kHz
 
 ##### RA6946 상수 #####
 
@@ -156,20 +140,16 @@ LCD_GRAPHICON              = 0x08
 
 ##### RA6946 함수 #####
 
-# 칩을 초기화합니다. 매개변수:
-#     화면의 가로 및 세로 크기
-#     D7, D6, D5, D4, D3, D2, D1, D0, RST, CD, WR, RD(선택적) 라인 GPIO 핀
-#     백라이트 전원 GPIO 핀(선택적)
-#     초기 백라이트 값 (0-1)
-#     백라이트 전원 GPIO 핀 PWM 활성화
-#     텍스트, 그래픽 및 문자 생성기용 사용자 지정 홈 주소(선택적)
-# GPIO 핀 값이 범위를 벗어나면(0-27) -> 옵션 사용되지 않음
+# initialise the chip, parameters:
+#     horizontal and vertical screen size
+#     D7, D6, D5, D4, D3, D2, D1, D0, RST, CD, WR, RD (optional) lines GPIO pins
+#     user specified home addresses for text, graphics and character generator (optional)
+# GPIO pin value is out of range (0-27) -> option not used
 class RA6963(object):
-    def __init__(self, pixx, pixy, d7, d6, d5, d4, d3, d2, d1, d0, rst, cd, wr, rd=-1, bl=-1,  backlight=1.0, pwm=False, addr=None):
+    def __init__(self, pixx, pixy, d7, d6, d5, d4, d3, d2, d1, d0, rst, cd, wr, rd=-1, addr=None):
         self._pixx = pixx  # LCD의 가로 해상도
         self._pixy = pixy  # LCD의 세로 해상도
         self._rst = rst  # 리셋 핀
-        self._pwm = pwm  # PWM 사용 여부
         self.addr = addr  # 사용자 지정 주소 (옵션)
         # 화면 속성
         self.inhibit = 0x03
@@ -183,30 +163,6 @@ class RA6963(object):
 
         # 매뉴얼에 따른 설정: tsetup, tclock, tread, tproc, thold = 20, 80, 150, 80, 50
         self._dev = initialise(d7, d6, d5, d4, d3, d2, d1, d0, cd, wr, rd, 8080, 20, 2000, 300, 1000, 2000)
-
-        # 백라이트 전원 설정
-        if (bl>=0 and bl<=27):
-            if pwm == False: gpioSetMode(bl, PI_OUTPUT)
-            else:
-                if not os.path.isdir(PWMPATH):
-                    print('PWM 초기화 안됨.')
-                    bl = -1
-                if (bl==12 or bl==18): self._pwmchan = 0
-                elif (bl==13 or bl==19): self._pwmchan = 1
-                else:
-                    print('GPIO%d는 PWM 하드웨어 핀이 아님.' % bl)
-                    bl = -1
-                if (bl != -1):
-                    if (bl==12 or bl==13): gpioSetMode(bl, PI_ALT0)
-                    if (bl==18 or bl==19): gpioSetMode(bl, PI_ALT5)
-                    self._path = PWMPATH + '/pwm%d' % self._pwmchan
-                    if not os.path.isdir(self._path):
-                        with open(PWMPATH + '/export', 'w') as f: f.write('%d' % self._pwmchan)
-                    time.sleep(0.1) # 안정화 대기
-                    with open(self._path + '/period', 'w') as f: f.write('%d' % PWMPER)
-        self._bl=bl
-        if (bl>=0 and bl<=27):
-            self.setbacklight(backlight)
 
         # 칩 초기화
         gpioWrite(self._rst, 1)
@@ -255,9 +211,6 @@ class RA6963(object):
 
     # 칩 종료
     def close(self):
-        if (self._bl>=0 and self._bl<=27 and self._pwm==True):
-            if os.path.isdir(self._path):
-                with open(PWMPATH + '/unexport', 'w') as f: f.write('%d' % self._pwmchan)
         deinitialise(self._dev)
 
     # 현재 포인터 위치에서 비트 리셋, 매개변수: 0-7
@@ -417,19 +370,6 @@ class RA6963(object):
         temp = (c_uint16.__ctype_le__ *1) (value)
         writedata(self._dev, temp, 2)
         writecommand(self._dev, LCD_SETADDRESSPOINTER)
-
-    # 백라이트 설정 변경
-    def setbacklight(self, backlight):
-        if (self._bl>=0 and self._bl<=27):
-            if self._pwm == False:
-                if(backlight>0): gpioWrite(self._bl, 1)
-                else: gpioWrite(self._bl, 0)
-            else:
-                if backlight> 0:
-                    with open(self._path + '/duty_cycle', 'w') as f: f.write('%d' % int(backlight*PWMPER))
-                    with open(self._path + '/enable', 'w') as f: f.write('1')
-                else:
-                    with open(self._path + '/enable', 'w') as f: f.write('0')
 
     # 현재 포인터 주소 설정
     def setcursor(self, xaddr, yaddr):
