@@ -65,39 +65,56 @@ def initialize_lcd():
     """Initialize the LCD with default settings."""
     reset_lcd()
     time.sleep(0.1)  # Delay to ensure the LCD is fully reset
-    
+
+    print("Setting text home address...")
     send_command(LCD_SETTEXTHOMEADDRESS)
     send_data(0x00)
     send_data(0x00)
-    
+    time.sleep(0.05)
+
+    print("Setting text area...")
     send_command(LCD_SETTEXTAREA)
     send_data(0x10)
     send_data(0x00)
-    
+    time.sleep(0.05)
+
+    print("Setting graphic home address...")
     send_command(LCD_SETGRAPHICHOMEADDRESS)
     send_data(0x00)
     send_data(0x10)
-    
+    time.sleep(0.05)
+
+    print("Setting graphic area...")
     send_command(LCD_SETGRAPHICAREA)
     send_data(0x10)
     send_data(0x00)
-    
-    send_command(LCD_DISPLAYMODE)
-    send_data(0x00)  # Text on, Graphic off
+    time.sleep(0.05)
 
-    time.sleep(0.1)  # Delay to ensure the initialization is processed
+    print("Setting display mode...")
+    send_command(LCD_DISPLAYMODE)
+    send_data(0x0E)  # Cursor blink on, Cursor display on, Text on, Graphic off
+    time.sleep(0.05)
+
+    print("Setting cursor pattern to 2-line cursor...")
+    send_command(0xA1)  # 2-line cursor pattern
+    time.sleep(0.05)
+
+    print("LCD initialization complete.")
 
 def set_cursor(x, y):
     """Set the cursor position."""
     address = x + (y * 256)
+    print(f"Setting cursor position to x: {x}, y: {y} (Address: {address})")
     send_command(LCD_SETCURSORPOINTER)
     send_data(address & 0xFF)
     send_data((address >> 8) & 0xFF)
     time.sleep(0.01)  # Small delay to ensure cursor is set
 
+
 def write_text(text):
     """Write text to the LCD."""
     for char in text:
+        print(f"Writing character: {char} (ASCII: {ord(char)})")
         send_data(ord(char) - 32)  # Assuming ASCII characters start at 0x20
         time.sleep(0.01)  # Small delay between characters
 
@@ -118,7 +135,11 @@ def test_lcd_command():
     send_data(0x04)  # This should turn on the text display only
 
 try:
+    initialize_lcd()
     test_lcd_command()
+    clear_screen()
+    set_cursor(0, 0)
+    write_text("Hello, World!")
 finally:
     GPIO.cleanup()
 
