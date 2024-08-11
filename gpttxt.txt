@@ -108,11 +108,17 @@ def clear_screen():
         send_data(0x00)
         time.sleep(0.01)  # Small delay between clearing characters
 
-try:
-    initialize_lcd()
-    clear_screen()
-    set_cursor(0, 0)
-    write_text("Hello, World!")
+def test_lcd_command():
+    """Test sending a basic command to the LCD."""
+    send_command(LCD_DISPLAYMODE)
+    send_data(0x00)  # This should turn off the display
 
+    time.sleep(2)  # Wait for 2 seconds to observe
+
+    send_data(0x04)  # This should turn on the text display only
+
+try:
+    test_lcd_command()
 finally:
     GPIO.cleanup()
+
